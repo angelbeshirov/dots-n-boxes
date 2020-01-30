@@ -1,0 +1,11 @@
+[package]
+name = "dots-n-boxes"
+version = "0.1.0"
+authors = ["angelbeshirov <angel.beshirov@abv.bg>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ggez = "0.5"
+rand = "0.7.3"
