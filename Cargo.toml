@@ -1,5 +1,5 @@
 [package]
-name = "dots-n-boxes"
+name = "dotsnboxes"
 version = "0.1.0"
 authors = ["angelbeshirov <angel.beshirov@abv.bg>"]
 edition = "2018"
@@ -9,3 +9,5 @@ edition = "2018"
 [dependencies]
 ggez = "0.5"
 rand = "0.7.3"
+cgmath = {version= "0.17", features=["mint"]}
+iced = "0.1.0-beta"
