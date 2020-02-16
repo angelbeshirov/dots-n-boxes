@@ -1,4 +1,4 @@
-use dotsnboxes::entities::{MathOperations, Player, Line, Square, DELTA};
+use dotsnboxes::entities::{MathOperations, Player, Line, Square, Board, DELTA};
 
 #[test]
 fn test_basic_distance() {
@@ -123,6 +123,49 @@ fn test_square_equallity() {
     let square2 = Square::new(line3, line1, line2, line4);
 
     assert!(square1 == square2);
+}
+
+#[test]
+fn test_board_add_line() {
+    let mut board = Board::new(3.0, 3.0, 600.0, 600.0, 50.0, 50.0);
+    let line = Line::new(6.0, 2.0, 3.0, 4.0, Player::Dummy);
+    board.add_line(line);
+
+    assert!(board.contains_line(&line));
+}
+
+#[test]
+fn test_temp_line_positioning() {
+    let expected = Line::new(300.0, 300.0, 300.0, 50.0, Player::Player1);
+
+    let mut board = Board::new(3.0, 3.0, 600.0, 600.0, 50.0, 50.0);
+    board.update_line(Player::Player1, 300.0, 200.0);
+    let temp_line = board.get_temp_line();
+
+    assert_eq!(expected, temp_line);
+}
+
+#[test]
+fn test_update_squares() {
+    let line1 = Line::new(50.0, 50.0, 50.0, 300.0, Player::Player1);
+    let line2 = Line::new(300.0, 50.0, 50.0, 50.0, Player::Player1);
+    let line3 = Line::new(50.0, 300.0, 300.0, 300.0, Player::Player1);
+    let line4 = Line::new(300.0, 300.0, 300.0, 50.0, Player::Player1);
+
+    let mut board = Board::new(3.0, 3.0, 600.0, 600.0, 50.0, 50.0);
+
+    board.add_line(line1);
+    board.add_line(line2);
+    board.add_line(line3);
+    board.add_line(line4);
+
+    assert_eq!(0, board.get_marked_by_player_1().len());
+    assert_eq!(0, board.get_marked_by_player_2().len());
+
+    board.update_squares(Player::Player1);
+
+    assert_eq!(1, board.get_marked_by_player_1().len());
+    assert_eq!(0, board.get_marked_by_player_2().len());
 }
 
 fn eq_float(a: f32, b: f32) -> bool {

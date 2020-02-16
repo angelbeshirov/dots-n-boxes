@@ -153,15 +153,15 @@ impl Square {
         }
     }
 
-    pub fn get_line1(&self) -> Line {
-        self.line1
+    pub fn get_line1(&self) -> &Line {
+        &self.line1
     }
 
     pub fn get_smallest(&self) -> (f32, f32) {
         let mut smallest_x = std::f32::MAX;
         let mut smallest_y = std::f32::MAX;
 
-        for x in vec![self.line1, self.line2, self.line3, self.line4] {
+        for x in vec![&self.line1, &self.line2, &self.line3, &self.line4] {
             if x.get_x1() <= smallest_x {
                 smallest_x = x.get_x1();
             }
@@ -210,6 +210,10 @@ pub struct Board {
 
 impl Board {
     pub fn new(_width: f32, _height: f32, window_width: f32, window_height: f32, _start_x: f32, _start_y: f32) -> Board {
+        if _width <= 1.0 || _height <= 1.0 {
+            panic!("Width and height must be greater than 1!");
+        }
+
         let _step_x = (window_width - 2.0 * _start_x) / (_width - 1.0);
         let _step_y = (window_height - 2.0 * _start_y) / (_height - 1.0);
         let mut _points = Vec::<(f32, f32)>::new();
@@ -277,8 +281,8 @@ impl Board {
         self.temp_line
     }
 
-    pub fn get_lines(&self) -> Vec<Line> {
-        self.lines.clone()
+    pub fn contains_line(&self, line: &Line) -> bool {
+        self.lines.contains(line)
     }
 
     pub fn add_line(&mut self, line: Line) {
@@ -422,21 +426,25 @@ impl Board {
         }
 
         if MathOperations::is_inside_triangle(closest_points[0].0, closest_points[0].1, closest_points[3].0, closest_points[3].1, middle_x, middle_y, x, y) {
-            self.temp_line = Line::new(closest_points[0].0, closest_points[0].1, closest_points[3].0, closest_points[3].1, next);  
+            let line = Line::new(closest_points[0].0, closest_points[0].1, closest_points[3].0, closest_points[3].1, next);
+            if !self.lines.contains(&line) {
+                self.temp_line = line;
+            }
         } else {
             for i in 0..3 {
                 if MathOperations::is_inside_triangle(closest_points[i].0, closest_points[i].1, closest_points[i + 1].0, closest_points[i + 1].1, middle_x, middle_y, x, y) {
-                    self.temp_line = Line::new(closest_points[i].0, closest_points[i].1, closest_points[i + 1].0, closest_points[i + 1].1, next);
-                    break;
+                    let line = Line::new(closest_points[i].0, closest_points[i].1, closest_points[i + 1].0, closest_points[i + 1].1, next);
+                    if !self.lines.contains(&line) {
+                        self.temp_line = line;
+                        break;
+                    }
                 }
             }
         }
     }
 }
 
-pub struct MinMax {
-
-}
+pub struct MinMax { }
 
 impl MinMax {
 
@@ -446,7 +454,7 @@ impl MinMax {
         }
     }
 
-    fn get_children(&self, board: &Board, player: Player) -> Vec<Board> {
+    fn get_children(board: &Board, player: Player) -> Vec<Board> {
         let mut children: Vec<Board> = Vec::new();
         let start = (X_INITIAL_OFFSET, Y_INITIAL_OFFSET);
 
@@ -457,7 +465,7 @@ impl MinMax {
                 start.1 + j as f32 * board.get_step_y(), 
                 start.0 + board.get_step_x() + i as f32 * board.get_step_x(), 
                 start.1 + j as f32 * board.get_step_y(), player);
-                if !board.get_lines().contains(&line) {
+                if !board.contains_line(&line) {
                     let mut cloned = board.clone();
                     cloned.add_line(line);
                     cloned.update_squares(player.clone());
@@ -474,7 +482,7 @@ impl MinMax {
                 start.0 + j as f32 * board.get_step_x(), 
                 start.1 + board.get_step_y() + i as f32 * board.get_step_y(), 
                 player);
-                if !board.get_lines().contains(&line) {
+                if !board.contains_line(&line) {
                     let mut cloned = board.clone();
                     cloned.add_line(line);
                     cloned.update_squares(player.clone());
@@ -486,13 +494,14 @@ impl MinMax {
         children
     }
 
-    pub fn alphabeta(&mut self, board: &Board, max_depth: u8, alpha: i32, beta: i32, is_max: bool) -> (Board, i32) {
+    pub fn alphabeta(board: &Board, max_depth: u8, alpha: i32, beta: i32, is_max: bool) -> (Board, i32) {
         if board.is_complete() || max_depth <= 0 {
             return (board.clone(), if is_max {
                     board.get_marked_by_player_2().len() as i32
                 } else {
                     -(board.get_marked_by_player_1().len() as i32)
-                });
+                }
+            );
         }
 
         let mut value: i32;
@@ -501,27 +510,23 @@ impl MinMax {
 
         if is_max {
             value = std::i32::MIN;
-            let children = self.get_children(board, Player::Player2);
+            let children = MinMax::get_children(board, Player::Player2);
             let mut all_different: bool = true;
-            for child in children.clone() {
+            for child in &children {
                 if child.get_marked_by_player_2().len() != parent_score.1 {
                     all_different = false;
                 }
             }
 
             for child in children {
-                //println!("Child for max is is {}", child.get_marked_by_computer().len());
                 let new_value: (Board, i32);
                 if child.get_marked_by_player_2().len() != parent_score.1 {
-                    new_value = self.alphabeta(&child, max_depth - 1, alpha, beta, true);
+                    new_value = MinMax::alphabeta(&child, max_depth - 1, alpha, beta, true);
                 } else {
-                    new_value = self.alphabeta(&child, max_depth - 1, alpha, beta, false);
+                    new_value = MinMax::alphabeta(&child, max_depth - 1, alpha, beta, false);
                 }
 
-                //println!("Found computer score {}", new_value.1);
-
                 if value < new_value.1 {
-                    //println!("In for that score");
                     result = (child, new_value.1);
                     value = new_value.1;
                 }
@@ -536,14 +541,12 @@ impl MinMax {
                     break;
                 }
             }
-
-            //println!("Result for max is {}", result.1);
         } else {
             value = std::i32::MAX;
-            let children = self.get_children(board, Player::Player1);
+            let children = MinMax::get_children(board, Player::Player1);
             let mut all_different: bool = true;
 
-            for child in children.clone() {
+            for child in &children{
                 if child.get_marked_by_player_1().len() != parent_score.0 {
                     all_different = false;
                 }
@@ -552,9 +555,9 @@ impl MinMax {
             for child in children {
                 let new_value: (Board, i32);
                 if child.get_marked_by_player_1().len() != parent_score.0 {
-                    new_value = self.alphabeta(&child, max_depth - 1, alpha, beta, true);
+                    new_value = MinMax::alphabeta(&child, max_depth - 1, alpha, beta, true);
                 } else {
-                    new_value = self.alphabeta(&child, max_depth - 1, alpha, beta, false);
+                    new_value = MinMax::alphabeta(&child, max_depth - 1, alpha, beta, false);
                 }
 
                 if value > new_value.1 {
@@ -571,14 +574,8 @@ impl MinMax {
                 if alpha >= beta && all_different {
                     break;
                 }
-
-                //println!("Child for min is {}", new_value.1);
             }
-
-            //println!("Result for min is {}", result.1);
         }
-
-        //println!("Returning {:?}", result.1);
 
         result
     }
@@ -645,7 +642,7 @@ impl MainMenu {
         let text_two_player_width = text_two_player.width(ctx) as f32;
         let text_two_player_height = text_two_player.height(ctx) as f32;
 
-        let x = (600.0 - text_one_player_width) / 2.0;
+        let x = (WINDOW_WIDTH - text_one_player_width) / 2.0;
 
         let k = MainMenu {
             one_player_entry: LabelButton::new(x, start_y, text_one_player_width, text_one_player_height, String::from("1 Player")),
@@ -675,12 +672,12 @@ impl MainMenu {
         Ok(())
     }
 
-    pub fn is_one_player_entry_clicked(&self, x: f32, y: f32) -> bool {
+    pub fn is_on_one_player_entry(&self, x: f32, y: f32) -> bool {
         MathOperations::is_inside_rectangle(x, y, self.one_player_entry.get_x(), self.one_player_entry.get_y(), 
             self.one_player_entry.get_width(), self.one_player_entry.get_height())
     }
 
-    pub fn is_two_player_entry_clicked(&self, x: f32, y: f32) -> bool {
+    pub fn is_on_two_player_entry(&self, x: f32, y: f32) -> bool {
         MathOperations::is_inside_rectangle(x, y, self.two_player_entry.get_x(), self.two_player_entry.get_y(), 
             self.two_player_entry.get_width(), self.two_player_entry.get_height())
     }
@@ -744,8 +741,9 @@ impl EndMenu {
         Ok(())
     }
 
-    pub fn get_restart(&self) -> &LabelButton {
-        &self.restart
+    pub fn is_on_restart(&self, x: f32, y: f32) -> bool {
+        MathOperations::is_inside_rectangle(x, y, self.restart.get_x(), self.restart.get_y(), 
+                self.restart.get_width(), self.restart.get_height())
     }
 }
 

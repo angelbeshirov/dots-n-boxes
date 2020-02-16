@@ -7,15 +7,14 @@ use ggez::graphics::{self};
 use ggez::{Context, GameResult, ContextBuilder, timer};
 use std::time::{Duration, Instant};
 
-use dotsnboxes::entities::{MathOperations, State, Player, Line, Board, MinMax, MainMenu, 
+use dotsnboxes::entities::{State, Player, Board, MinMax, MainMenu, 
     EndMenu, WINDOW_WIDTH, WINDOW_HEIGHT, WIDTH, HEIGHT, X_INITIAL_OFFSET, Y_INITIAL_OFFSET};
 
-const UPDATES_PER_SECOND: f32 = 8.0;
+const UPDATES_PER_SECOND: f32 = 10.0;
 const MILLIS_PER_UPDATE: u64 = (1.0 / UPDATES_PER_SECOND * 1000.0) as u64;
 
 struct GameState {
     board: Board,
-    min_max: MinMax,
     last_update: Instant,
     main_menu: MainMenu,
     end_menu: EndMenu,
@@ -24,15 +23,9 @@ struct GameState {
 }
 
 impl GameState {
-    /// Our new function will set up the initial state of our game.
     pub fn new(ctx: &mut Context) -> Self {
-        // _width: f32, _height: f32, window_width: f32, window_height: f32, _start_x: f32, _start_y: f32
-        let mut board = Board::new(WIDTH, HEIGHT, WINDOW_WIDTH, WINDOW_HEIGHT, X_INITIAL_OFFSET, Y_INITIAL_OFFSET);
-        //board.set_up();
-
         GameState {
-            board: board,
-            min_max: MinMax::new(),
+            board: Board::new(WIDTH, HEIGHT, WINDOW_WIDTH, WINDOW_HEIGHT, X_INITIAL_OFFSET, Y_INITIAL_OFFSET),
             last_update: Instant::now(),
             main_menu: MainMenu::new(ctx).unwrap(),
             end_menu: EndMenu::new(ctx).unwrap(),
@@ -44,13 +37,6 @@ impl GameState {
 
 impl event::EventHandler for GameState {
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
-        if Instant::now() - self.last_update >= Duration::from_millis(MILLIS_PER_UPDATE) {
-            // Then we check to see if the game is over. If not, we'll update. If so, we'll just do nothing.
-            //println!("Update");
-            // If we updated, we set our last_update to be now
-            self.last_update = Instant::now();
-        }
-        // Finally we return `Ok` to indicate we didn't run into any errors
         Ok(())
     }
 
@@ -66,27 +52,31 @@ impl event::EventHandler for GameState {
         }
 
         graphics::present(ctx)?;
-        // timer::sleep_until_next_frame();
         Ok(())
     }
 
     fn mouse_motion_event(&mut self, _ctx: &mut Context, x: f32, y: f32, _xrel: f32, _yrel: f32) {
-        
         if Instant::now() - self.last_update >= Duration::from_millis(MILLIS_PER_UPDATE) {
             ggez::input::mouse::set_cursor_type(_ctx, ggez::input::mouse::MouseCursor::Default);
+            if self.mode == State::OnePlayer || self.mode == State::TwoPlayers || 
+                    (self.mode == State::None && (self.main_menu.is_on_one_player_entry(x, y) || self.main_menu.is_on_two_player_entry(x, y))) ||
+                    (self.mode == State::GameOver && self.end_menu.is_on_restart(x, y)) {
+                ggez::input::mouse::set_cursor_type(_ctx, ggez::input::mouse::MouseCursor::Hand);
+            }
+            
             self.board.update_line(self.next, x, y);
         }
     }
 
     fn mouse_button_down_event(&mut self, _ctx: &mut Context, _button: MouseButton, _x: f32, _y: f32) {
         if self.mode == State::None {
-            if self.main_menu.is_one_player_entry_clicked(_x, _y) {
+            if self.main_menu.is_on_one_player_entry(_x, _y) {
                 self.mode = State::OnePlayer;
-            } else if self.main_menu.is_two_player_entry_clicked(_x, _y) {
+            } else if self.main_menu.is_on_two_player_entry(_x, _y) {
                 self.mode = State::TwoPlayers;
             }
         } else if self.mode == State::OnePlayer {
-            if !self.board.get_lines().contains(&self.board.get_temp_line()) {
+            if !self.board.contains_line(&self.board.get_temp_line()) {
                 let previous_score = self.board.get_marked_by_player_1().len();
 
                 self.board.add_line(self.board.get_temp_line());
@@ -95,14 +85,13 @@ impl event::EventHandler for GameState {
                 if self.board.get_marked_by_player_1().len() == previous_score {
                     let mut previous_score = self.board.get_marked_by_player_2().len();
 
-                    let computer_move = self.min_max.alphabeta(&self.board, 6, std::i32::MIN, std::i32::MAX, true);
+                    let computer_move = MinMax::alphabeta(&self.board, 6, std::i32::MIN, std::i32::MAX, true);
                     self.board = computer_move.0;
-                    println!("Got score {}", computer_move.1);
                     let mut current_score = self.board.get_marked_by_player_2().len();
     
                     while previous_score != current_score {
                         previous_score = current_score;
-                        let computer_move = self.min_max.alphabeta(&self.board, 6, std::i32::MIN, std::i32::MAX, true);
+                        let computer_move = MinMax::alphabeta(&self.board, 6, std::i32::MIN, std::i32::MAX, true);
                         self.board = computer_move.0;
                         current_score = self.board.get_marked_by_player_2().len();
                     }
@@ -113,7 +102,7 @@ impl event::EventHandler for GameState {
                 }
             }
         } else if self.mode == State::TwoPlayers {
-            if !self.board.get_lines().contains(&self.board.get_temp_line()) {
+            if !self.board.contains_line(&self.board.get_temp_line()) {
                 if self.next == Player::Player1 {
                     let previous = self.board.get_marked_by_player_1().len();
                     self.board.add_line(self.board.get_temp_line());
@@ -137,12 +126,11 @@ impl event::EventHandler for GameState {
                 self.mode = State::GameOver;
             }
         } else if self.mode == State::GameOver {
-            let restart = self.end_menu.get_restart();
 
-            if MathOperations::is_inside_rectangle(_x, _y, restart.get_x(), restart.get_y(), 
-                    restart.get_width(), restart.get_height()) {
+            if self.end_menu.is_on_restart(_x, _y) {
                 self.mode = State::None;
                 self.board = Board::new(WIDTH, HEIGHT, WINDOW_WIDTH, WINDOW_HEIGHT, X_INITIAL_OFFSET, Y_INITIAL_OFFSET);
+                self.next = Player::Player1;
             }
         }
     }
@@ -156,7 +144,7 @@ impl event::EventHandler for GameState {
     ) {
         match keycode {
             event::KeyCode::Escape => event::quit(_ctx),
-            _ => (), // Do nothing
+            _ => (),
         }
     }
 }
@@ -180,6 +168,6 @@ pub fn main() {
     if let Err(e) = event::run(ctx, event_loop, game_state) {
         println!("Error encountered: {}", e);
     } else {
-        println!("Game exited cleanly.");
+        println!("Game exited cleanly!");
     }
 }
